@@ -195,5 +195,9 @@ func main() {
 	router.DELETE("/urls/:code", RateLimiter(10, time.Minute), AuthMiddleware(), DeleteURLHandler)
 	router.GET("/stats/:code", RateLimiter(10, time.Minute), StatsHandler)
 
-	router.Run(":8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	router.Run(":" + port)
 }
