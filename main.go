@@ -28,6 +28,35 @@ func generateCode() string {
 	bytes := make([]byte, 4)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
+
+}
+
+func runMigrations() {
+	migrations := `
+CREATE TABLE IF NOT EXISTS users (
+    user_id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(60) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS urls (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(10) UNIQUE NOT NULL,
+    original_url TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    user_id INTEGER REFERENCES users(user_id)
+);
+CREATE TABLE IF NOT EXISTS clicks (
+    id BIGSERIAL PRIMARY KEY,
+    url_id BIGINT NOT NULL REFERENCES urls(id),
+    clicked_at TIMESTAMP NOT NULL DEFAULT NOW()
+);`
+
+	_, err := dbPool.Exec(context.Background(), migrations)
+	if err != nil {
+		logger.Fatal("Failed to run migrations", zap.Error(err))
+	}
+	logger.Info("Migrations completed successfully")
 }
 
 func main() {
@@ -57,19 +86,28 @@ func main() {
 	}
 	defer dbPool.Close()
 
+	runMigrations()
+
 	// 4. Connect to Redis
 	redisAddr := os.Getenv("REDIS_URL")
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
-	redisClient = redis.NewClient(&redis.Options{
-		Addr: redisAddr,
-		DB:   0,
-	})
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		logger.Fatal("Unable to connect to Redis", zap.Error(err))
+
+	var rdClient *redis.Client
+	if len(redisAddr) > 8 && redisAddr[:8] == "redis://" {
+		opt, err := redis.ParseURL(redisAddr)
+		if err != nil {
+			logger.Fatal("Failed to parse Redis URL", zap.Error(err))
+		}
+		rdClient = redis.NewClient(opt)
+	} else {
+		rdClient = redis.NewClient(&redis.Options{
+			Addr: redisAddr,
+			DB:   0,
+		})
 	}
-	logger.Info("Connected to Redis")
+	redisClient = rdClient
 
 	// 5. Set up router
 	gin.SetMode(gin.ReleaseMode)
