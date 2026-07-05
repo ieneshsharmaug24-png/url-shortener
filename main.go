@@ -126,6 +126,11 @@ func main() {
 			return
 		}
 
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:8080"
+		}
+
 		userID, exists := c.Get("user_id")
 		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
@@ -155,7 +160,7 @@ func main() {
 
 		c.JSON(http.StatusOK, gin.H{
 			"code":      code,
-			"short_url": "http://localhost:8080/" + code,
+			"short_url": baseURL + "/" + code,
 		})
 	})
 
