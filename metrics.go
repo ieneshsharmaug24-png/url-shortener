@@ -39,6 +39,9 @@ func PrometheusMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		path := c.FullPath()
+		if path == "" {
+			path = c.Request.URL.Path
+		}
 
 		c.Next()
 
