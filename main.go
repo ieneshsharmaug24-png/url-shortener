@@ -8,11 +8,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -210,10 +212,19 @@ func main() {
 	router.GET("/urls", AuthMiddleware(), GetURLsHandler)
 	router.POST("/refresh", RefreshHandler)
 	router.POST("/logout", AuthMiddleware(), LogoutHandler)
+	router.Use(PrometheusMiddleware())
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	router.Run(":" + port)
+
+	go func() {
+		for {
+			activeGoroutines.Set(float64(runtime.NumGoroutine()))
+			time.Sleep(15 * time.Second)
+		}
+	}()
 }
