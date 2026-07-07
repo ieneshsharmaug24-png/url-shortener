@@ -202,6 +202,8 @@ func main() {
 	router.GET("/stats/:code", RateLimiter(10, time.Minute), StatsHandler)
 	router.GET("/debug/pprof/*any", gin.WrapH(http.DefaultServeMux))
 	router.GET("/urls", AuthMiddleware(), GetURLsHandler)
+	router.POST("/refresh", RefreshHandler)
+	router.POST("/logout", AuthMiddleware(), LogoutHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {

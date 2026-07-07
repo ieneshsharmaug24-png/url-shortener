@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
@@ -106,8 +108,16 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	refreshToken, err := createRefreshToken(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create refresh token"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
+		"access_token":  token,
+		"refresh_token": refreshToken,
+		"expires_in":    900,
 	})
 }
 
@@ -271,4 +281,97 @@ func GetURLsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, urls)
+}
+
+func generateRefreshToken() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func createRefreshToken(userID int) (string, error) {
+	token, err := generateRefreshToken()
+	if err != nil {
+		return "", err
+	}
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+
+	_, err = dbPool.Exec(
+		context.Background(),
+		`INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+		userID, token, expiresAt,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+func RefreshHandler(c *gin.Context) {
+	var req RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	var userID int
+	var expiresAt time.Time
+	err := dbPool.QueryRow(
+		context.Background(),
+		`SELECT user_id, expires_at FROM refresh_tokens WHERE token = $1`,
+		req.RefreshToken,
+	).Scan(&userID, &expiresAt)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		// Clean up expired token
+		dbPool.Exec(context.Background(),
+			`DELETE FROM refresh_tokens WHERE token = $1`, req.RefreshToken)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token expired"})
+		return
+	}
+
+	accessToken, err := generateJWT(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": accessToken,
+		"expires_in":   900,
+	})
+}
+
+func LogoutHandler(c *gin.Context) {
+	var req RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	_, err := dbPool.Exec(
+		context.Background(),
+		`DELETE FROM refresh_tokens WHERE token = $1`,
+		req.RefreshToken,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 }

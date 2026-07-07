@@ -18,3 +18,10 @@ CREATE TABLE IF NOT EXISTS clicks (
     url_id BIGINT NOT NULL REFERENCES urls(id),
     clicked_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    token VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
