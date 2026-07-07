@@ -201,6 +201,7 @@ func main() {
 	router.DELETE("/urls/:code", RateLimiter(10, time.Minute), AuthMiddleware(), DeleteURLHandler)
 	router.GET("/stats/:code", RateLimiter(10, time.Minute), StatsHandler)
 	router.GET("/debug/pprof/*any", gin.WrapH(http.DefaultServeMux))
+	router.GET("/urls", AuthMiddleware(), GetURLsHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {

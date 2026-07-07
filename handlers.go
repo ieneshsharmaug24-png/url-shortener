@@ -19,6 +19,13 @@ type SignupRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type URLResponse struct {
+	ID          int       `json:"id"`
+	Code        string    `json:"code"`
+	OriginalURL string    `json:"original_url"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 func SignupHandler(c *gin.Context) {
 	var req SignupRequest
 
@@ -208,4 +215,60 @@ func StatsHandler(c *gin.Context) {
 		"code":        code,
 		"click_count": clickCount,
 	})
+}
+
+func GetURLsHandler(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userIDFloat, ok := userID.(float64)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+		return
+	}
+	userIDInt := int(userIDFloat)
+
+	rows, err := dbPool.Query(
+		context.Background(),
+		`SELECT id, code, original_url, created_at
+		 FROM urls
+		 WHERE user_id = $1
+		 ORDER BY created_at DESC`,
+		userIDInt,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch URLs"})
+		return
+	}
+	defer rows.Close()
+
+	var urls []URLResponse
+	for rows.Next() {
+		var url URLResponse
+		err := rows.Scan(
+			&url.ID,
+			&url.Code,
+			&url.OriginalURL,
+			&url.CreatedAt,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read URLs"})
+			return
+		}
+		urls = append(urls, url)
+	}
+
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	if urls == nil {
+		urls = []URLResponse{}
+	}
+
+	c.JSON(http.StatusOK, urls)
 }
