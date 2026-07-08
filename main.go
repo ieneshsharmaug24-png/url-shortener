@@ -123,6 +123,8 @@ func main() {
 	router := gin.New()
 	router.Use(ZapLogger(logger))
 	router.Use(gin.Recovery())
+	router.Use(PrometheusMiddleware())
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -212,8 +214,6 @@ func main() {
 	router.GET("/urls", AuthMiddleware(), GetURLsHandler)
 	router.POST("/refresh", RefreshHandler)
 	router.POST("/logout", AuthMiddleware(), LogoutHandler)
-	router.Use(PrometheusMiddleware())
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	port := os.Getenv("PORT")
 	if port == "" {
