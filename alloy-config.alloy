@@ -1,0 +1,19 @@
+prometheus.scrape "url_shortener" {
+  targets = [{
+    __address__ = "url-shortener-production-b02f.up.railway.app",
+  }]
+  scheme = "https"
+  metrics_path = "/metrics"
+  forward_to = [prometheus.remote_write.grafana.receiver]
+  scrape_interval = "15s"
+}
+
+prometheus.remote_write "grafana" {
+  endpoint {
+    url = env("GRAFANA_REMOTE_WRITE_URL")
+    basic_auth {
+      username = env("GRAFANA_USERNAME")
+      password = env("GRAFANA_API_KEY")
+    }
+  }
+}
