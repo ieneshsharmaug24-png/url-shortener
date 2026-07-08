@@ -10,10 +10,10 @@ prometheus.scrape "url_shortener" {
 
 prometheus.remote_write "grafana" {
   endpoint {
-    url = env("GRAFANA_REMOTE_WRITE_URL")
+    url = sys.env("GRAFANA_REMOTE_WRITE_URL")
     basic_auth {
-      username = env("GRAFANA_USERNAME")
-      password = env("GRAFANA_API_KEY")
+      username = sys.env("GRAFANA_USERNAME")
+      password = sys.env("GRAFANA_API_KEY")
     }
   }
 }
